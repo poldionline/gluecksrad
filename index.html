@@ -69,14 +69,14 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0}
 .hint{font-size:12px;color:var(--muted);margin:6px 0 0;line-height:1.4}
 .spacer{flex:1}
 
-main{flex:1;min-width:0;display:flex;flex-direction:column}
+main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
 .view{flex:1;min-height:0;padding:18px 28px 28px;overflow:auto;display:none}
 .view.on{display:flex}
 
 /* Wheel */
 #vRad{flex-direction:column;align-items:center;gap:14px;justify-content:center}
-.stage{width:min(100%,380px);aspect-ratio:1;position:relative;flex:none;max-height:calc(100vh - 270px);max-width:calc(100vh - 270px);min-width:240px}
-canvas{width:100%;height:100%;display:block}
+.stage{width:100%;flex:1 1 0;min-height:200px;container-type:size;display:grid;place-items:center}
+canvas{display:block;width:min(100cqw,100cqh,520px);height:min(100cqw,100cqh,520px)}
 .win{min-height:62px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:2px}
 .win small{color:var(--muted);font-size:13px}
 .win strong{font-size:clamp(24px,4vw,38px);letter-spacing:-.02em;font-weight:800;color:var(--accent);animation:pop .45s cubic-bezier(.2,1.4,.4,1)}
@@ -135,7 +135,6 @@ h1{margin:0;font-size:28px;letter-spacing:-.03em;font-weight:800}
   .nav button{flex:1;flex-direction:column;gap:3px;padding:8px 6px;font-size:12px;align-items:center;text-align:center}
   .nav button em{display:none}
   .view{padding-left:14px;padding-right:14px}
-  .stage{max-height:none;max-width:none}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -273,7 +272,7 @@ function sliceColor(i,n,h0,s0){
 }
 function draw(){
   const W=cv.width;if(!W)return;
-  const c=W/2,R=c*.93,vis=visible(),n=vis.length;
+  const c=W/2,R=c*.86,vis=visible(),n=vis.length;
   ctx.clearRect(0,0,W,W);
   const [h0,s0]=rgb2hsl(hexRGB(S.accent));
   const k=W/600;
