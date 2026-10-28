@@ -75,7 +75,7 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 
 /* Wheel */
 #vRad{flex-direction:column;align-items:center;gap:14px;justify-content:center}
-.stage{width:min(72vh,100%,620px);aspect-ratio:1;position:relative;flex:none;max-height:calc(100vh - 190px);max-width:calc(100vh - 190px);min-width:260px}
+.stage{width:min(100%,380px);aspect-ratio:1;position:relative;flex:none;max-height:calc(100vh - 270px);max-width:calc(100vh - 270px);min-width:240px}
 canvas{width:100%;height:100%;display:block}
 .win{min-height:62px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:2px}
 .win small{color:var(--muted);font-size:13px}
@@ -335,25 +335,33 @@ function draw(){
 matchMedia("(prefers-color-scheme:dark)").addEventListener("change",draw);
 
 /* ---------- Spin ---------- */
-// Je länger die Dauer, desto stärker der Abbremsexponent -> am Ende kriecht das Rad.
-const expFor=d=>2.6+d*.22;
+// Geschwindigkeitsverlauf: schneller Start, langes Ausrollen, aber nie langsamer als VEND (Rad bleibt sichtbar in Bewegung).
+const VEND=0.22, V0=16;           // rad/s: Mindest-Kriechtempo (~13°/s) und Starttempo
 function spin(){
   const vis=visible();
   if(spinning||!vis.length)return;
   spinning=true;$("#win").innerHTML="";updateButtons();
   const n=vis.length,s=TAU/n,pos=Math.floor(Math.random()*n);
-  const T=Math.max(1,S.dur)*1000, p=expFor(S.dur);
-  // Das Segment liegt zufällig innerhalb des Zeigerbereichs, nicht immer exakt mittig
+  const T=Math.max(1,S.dur);                 // Sekunden
+  const tau=Math.min(1,T*.08), T1=T-tau;     // Hauptphase + sanftes Abstoppen am Ende
+  const p=2+T/12;                            // je länger, desto stärker das Abbremsen
   const jitter=(Math.random()-.5)*s*.7;
   const goal=((-(pos+.5)*s+jitter)%TAU+TAU)%TAU;
   const delta=(((goal-angle)%TAU)+TAU)%TAU;
-  const rot=Math.round(4+Math.sqrt(S.dur)*1.6);
-  const total=rot*TAU+delta, a0=angle, t0=performance.now();
-  const ease=t=>1-Math.pow(1-t,p);
+  const base=VEND*(T1+tau/2);
+  const want=base+(V0-VEND)*T1/(p+1);
+  const rot=Math.max(1,Math.round((want-delta)/TAU));
+  const total=rot*TAU+delta;
+  const v0=VEND+(total-base)*(p+1)/T1;       // Starttempo, damit genau total erreicht wird
+  const A=(v0-VEND)*T1/(p+1);
+  const P1=t=>VEND*t+A*(1-Math.pow(1-t/T1,p+1));
+  const E1=P1(T1);
+  const pos_t=t=>{if(t<=T1)return P1(t);const u=t-T1;return E1+VEND*u-VEND*u*u/(2*tau)};
+  const a0=angle,t0=performance.now();
   const frame=now=>{
-    const t=Math.min((now-t0)/T,1);
-    angle=a0+total*ease(t);draw();
-    if(t<1){raf=requestAnimationFrame(frame)}
+    const t=Math.min((now-t0)/1000,T);
+    angle=a0+pos_t(t);draw();
+    if(t<T){raf=requestAnimationFrame(frame)}
     else{angle=a0+total;finish(vis[pos])}
   };
   raf=requestAnimationFrame(frame);
@@ -539,7 +547,7 @@ function renderStatus(){
 }
 function renderDur(){
   $("#dur").value=S.dur;$("#durL").textContent=S.dur+" s";
-  $("#durH").textContent=S.dur>=30?"Das Rad wird zum Ende hin extrem langsam.":S.dur>=12?"Langes, spannendes Ausrollen.":"Kurzer Dreh.";
+  $("#durH").textContent=S.dur>=30?"Das Rad wird zum Ende hin sehr langsam, dreht aber immer sichtbar weiter.":S.dur>=12?"Langes, spannendes Ausrollen.":"Kurzer Dreh.";
 }
 $("#dur").oninput=e=>{S.dur=+e.target.value;save();renderDur()};
 function renderAll(){
