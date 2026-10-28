@@ -74,7 +74,7 @@ main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
 .view.on{display:flex}
 
 /* Wheel */
-#vRad{flex-direction:column;align-items:center;gap:14px;justify-content:center}
+#vRad{position:relative;flex-direction:column;align-items:center;gap:14px;justify-content:center}
 .stage{position:relative;width:100%;flex:1 1 0;min-height:200px;container-type:size;display:grid;place-items:center}
 canvas{display:block;width:min(100cqw,100cqh);height:min(100cqw,100cqh)}
 .win{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;max-width:86%;text-align:center;display:flex;flex-direction:column;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:14px 28px;box-shadow:var(--shadow),0 0 0 6px var(--accent-soft);cursor:pointer}
@@ -118,6 +118,11 @@ h1{margin:0;font-size:28px;letter-spacing:-.03em;font-weight:800}
 .tg input:checked::after{transform:translateX(18px)}
 .tg small{display:block;color:var(--muted);font-weight:400;font-size:13px;margin-top:2px}
 .tg.sm{font-size:13px;color:var(--muted)}
+.fsb{position:absolute;top:14px;right:16px;z-index:3;width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--muted);display:grid;place-items:center;padding:0}
+.fsb:hover{color:var(--text);border-color:var(--muted)}
+.fsb svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+body.fsm aside{display:none}
+body.fsm .fsb svg{transform:rotate(45deg)}
 .chips{display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;min-height:120px;flex:1;overflow:auto}
 .chip{display:flex;align-items:center;gap:2px;background:var(--accent-soft);border-radius:999px;padding:3px 4px 3px 14px;font-weight:600;height:36px}
 .chip.h{background:var(--panel2);color:var(--muted);text-decoration:line-through}
@@ -193,20 +198,10 @@ h1{margin:0;font-size:28px;letter-spacing:-.03em;font-weight:800}
       <h3>Ziehen</h3>
       <label class="tg"><input type="checkbox" class="autoT"><span>Gezogene automatisch ausblenden<small>Der gezogene Name verschwindet nach dem Dreh aus dem Rad. Ausgeschaltet bleibt er im Rad.</small></span></label>
     </div>
-    <div class="card">
-      <h3>Anzeige</h3>
-      <p class="hint" style="margin:0 0 10px">Hell/Dunkel folgt automatisch deinem System.</p>
-      <div class="row"><button class="sec" id="fs">⛶ Vollbild (F11)</button></div>
-    </div>
-    <div class="card">
-      <h3>Daten</h3>
-      <p class="hint" id="stor" style="margin:0 0 10px"></p>
-      <div class="row"><button class="sec" id="exp">Sichern</button><button class="sec" id="imp">Wiederherstellen</button><button class="sec d" id="rst">Alles zurücksetzen</button></div>
-      <input type="file" id="impF" accept="application/json,.json" hidden>
-    </div>
   </section>
 
   <section class="view on" id="vRad">
+    <button class="fsb" id="fsb" title="Vollbild" aria-label="Vollbild"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <div class="stage"><canvas id="cv" aria-label="Glücksrad"></canvas><div class="win" id="win" title="Zum Schließen tippen"></div></div>
     <div class="bar">
       <button class="spin" id="spin">Rad drehen</button>
@@ -565,58 +560,34 @@ function go(v){
 }
 document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>go(b.dataset.v));
 $("#toLists").onclick=()=>go("vListen");
-const fs=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.();
-$("#fs").onclick=fs;
+/* Vollbild nur für die Glücksrad-Seite */
+function setFS(on){
+  document.body.classList.toggle("fsm",on);
+  const el=document.documentElement;
+  try{
+    if(on&&!document.fullscreenElement&&!document.webkitFullscreenElement){const f=el.requestFullscreen||el.webkitRequestFullscreen;const r=f&&f.call(el);r&&r.catch&&r.catch(()=>{})}
+    if(!on&&(document.fullscreenElement||document.webkitFullscreenElement)){(document.exitFullscreen||document.webkitExitFullscreen).call(document)}
+  }catch(e){}
+  setTimeout(resize,120);
+}
+$("#fsb").onclick=()=>setFS(!document.body.classList.contains("fsm"));
+["fullscreenchange","webkitfullscreenchange"].forEach(n=>document.addEventListener(n,()=>{
+  if(!document.fullscreenElement&&!document.webkitFullscreenElement&&document.body.classList.contains("fsm"))setFS(false);
+}));
 addEventListener("keydown",e=>{
-  if(e.key==="F11"){e.preventDefault();fs()}
+  if(e.key==="Escape"&&document.body.classList.contains("fsm"))setFS(false);
   if(e.code==="Space"&&$("#vRad").classList.contains("on")&&!/INPUT|BUTTON/.test(document.activeElement.tagName)){e.preventDefault();spin()}
 });
 
-/* ---------- Lokale Speicherung ---------- */
-function storageOK(){try{localStorage.setItem("_t","1");localStorage.removeItem("_t");return true}catch(e){return false}}
-function renderStor(){
-  $("#stor").textContent=storageOK()
-    ?"Alles (Listen, Namen, Farbe, Drehdauer, Einstellungen) wird nur lokal in diesem Browser gespeichert. Es wird nichts gesendet."
-    :"⚠ Dein Browser blockiert die Speicherung (z. B. privater Modus). Änderungen gehen beim Schließen verloren – nutze „Sichern“.";
-}
+/* ---------- Automatische lokale Speicherung ---------- */
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 document.querySelectorAll(".autoT").forEach(c=>{
   c.checked=S.autoHide;
   c.onchange=()=>{S.autoHide=c.checked;document.querySelectorAll(".autoT").forEach(x=>x.checked=S.autoHide);save()};
 });
-$("#exp").onclick=()=>{
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:"application/json"}));
-  a.download="gluecksrad-backup.json";document.body.append(a);a.click();a.remove();
-};
-$("#imp").onclick=()=>$("#impF").click();
-$("#impF").onchange=e=>{
-  const f=e.target.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=()=>{
-    try{
-      const o=JSON.parse(r.result),L={};
-      for(const k in (o.lists||{}))if(Array.isArray(o.lists[k]))L[k]=o.lists[k].filter(x=>x&&typeof x.name==="string").map(x=>({name:x.name,hidden:!!x.hidden}));
-      if(!Object.keys(L).length)throw 0;
-      if(!confirm("Aktuelle Daten durch die Sicherung ersetzen?"))return;
-      S.lists=L;S.active=L[o.active]?o.active:Object.keys(L)[0];
-      if(+o.dur>=1&&+o.dur<=120)S.dur=+o.dur;
-      if(/^#[0-9a-f]{6}$/i.test(o.accent))S.accent=o.accent;
-      S.autoHide=o.autoHide!==false;
-      save();document.querySelectorAll(".autoT").forEach(x=>x.checked=S.autoHide);
-      renderDur();applyAccent();renderAll();
-    }catch(err){alert("Diese Datei ist keine gültige Glücksrad-Sicherung.")}
-  };
-  r.readAsText(f);e.target.value="";
-};
-$("#rst").onclick=()=>{
-  if(!confirm("Wirklich ALLE gespeicherten Daten löschen?"))return;
-  try{localStorage.removeItem(KEY)}catch(e){}
-  location.reload();
-};
 
 $("#addIn").value=S.draft||"";pend=smartSplit($("#addIn").value);
-renderDur();renderStor();applyAccent();renderAll();
+renderDur();applyAccent();renderAll();
 go(document.getElementById(S.view)?S.view:"vRad");
 })();
 </script>
