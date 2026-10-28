@@ -20,7 +20,7 @@
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
-body{font-family:Manrope,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);
+body{height:100dvh;font-family:Manrope,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);
   display:flex;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
 button,input{font:inherit;color:inherit}
 button{cursor:pointer}
@@ -70,14 +70,15 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0}
 .spacer{flex:1}
 
 main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
-.view{flex:1;min-height:0;padding:18px 28px 28px;overflow:auto;display:none}
+.view{flex:1;min-height:0;padding:14px 20px 18px;overflow:auto;display:none}
 .view.on{display:flex}
 
 /* Wheel */
 #vRad{flex-direction:column;align-items:center;gap:14px;justify-content:center}
-.stage{width:100%;flex:1 1 0;min-height:200px;container-type:size;display:grid;place-items:center}
-canvas{display:block;width:min(100cqw,100cqh,520px);height:min(100cqw,100cqh,520px)}
-.win{min-height:62px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.stage{position:relative;width:100%;flex:1 1 0;min-height:200px;container-type:size;display:grid;place-items:center}
+canvas{display:block;width:min(100cqw,100cqh);height:min(100cqw,100cqh)}
+.win{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;max-width:86%;text-align:center;display:flex;flex-direction:column;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:14px 28px;box-shadow:var(--shadow),0 0 0 6px var(--accent-soft);cursor:pointer}
+.win:empty{display:none}
 .win small{color:var(--muted);font-size:13px}
 .win strong{font-size:clamp(24px,4vw,38px);letter-spacing:-.02em;font-weight:800;color:var(--accent);animation:pop .45s cubic-bezier(.2,1.4,.4,1)}
 @keyframes pop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
@@ -206,8 +207,7 @@ h1{margin:0;font-size:28px;letter-spacing:-.03em;font-weight:800}
   </section>
 
   <section class="view on" id="vRad">
-    <div class="stage"><canvas id="cv" aria-label="Glücksrad"></canvas></div>
-    <div class="win" id="win"></div>
+    <div class="stage"><canvas id="cv" aria-label="Glücksrad"></canvas><div class="win" id="win" title="Zum Schließen tippen"></div></div>
     <div class="bar">
       <button class="spin" id="spin">Rad drehen</button>
       <button class="sec" id="rnd">Neue Runde</button>
@@ -231,7 +231,8 @@ const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
 const entries=()=>S.lists[S.active];
 const visible=()=>entries().map((e,i)=>({...e,i})).filter(e=>!e.hidden);
 
-let angle=0,spinning=false,raf=0;
+let angle=0,spinning=false,raf=0,winT=0;
+$("#win").onclick=()=>{$("#win").innerHTML=""};
 
 /* ---------- Accent ---------- */
 function hexRGB(h){h=h.replace("#","");return[0,2,4].map(i=>parseInt(h.substr(i,2),16))}
@@ -272,14 +273,14 @@ function sliceColor(i,n,h0,s0){
 }
 function draw(){
   const W=cv.width;if(!W)return;
-  const c=W/2,R=c*.86,vis=visible(),n=vis.length;
+  const c=W/2,R=c*.91,vis=visible(),n=vis.length;
   ctx.clearRect(0,0,W,W);
   const [h0,s0]=rgb2hsl(hexRGB(S.accent));
   const k=W/600;
 
   // shadow + rim
   ctx.save();
-  ctx.shadowColor=dark()?"rgba(0,0,0,.6)":"rgba(20,22,40,.22)";ctx.shadowBlur=30*k;ctx.shadowOffsetY=10*k;
+  ctx.shadowColor=dark()?"rgba(0,0,0,.6)":"rgba(20,22,40,.22)";ctx.shadowBlur=14*k;ctx.shadowOffsetY=5*k;
   ctx.beginPath();ctx.arc(c,c,R+8*k,0,TAU);ctx.fillStyle=css("--panel");ctx.fill();ctx.restore();
 
   if(!n){
@@ -369,6 +370,7 @@ function finish(w){
   angle%=TAU;draw();
   $("#win").innerHTML='<small>Gezogen</small><strong></strong>';
   $("#win strong").textContent=w.name;
+  clearTimeout(winT);winT=setTimeout(()=>{$("#win").innerHTML=""},4500);
   setTimeout(()=>{
     if(S.autoHide&&entries()[w.i])entries()[w.i].hidden=true;
     save();spinning=false;draw();renderAll();
