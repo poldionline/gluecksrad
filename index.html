@@ -123,6 +123,7 @@ h1{margin:0;font-size:28px;letter-spacing:-.03em;font-weight:800}
 .fsb svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 body.fsm aside{display:none}
 body.fsm .fsb svg{transform:rotate(45deg)}
+.sec svg{width:18px;height:18px;vertical-align:-4px;margin-right:8px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
 .chips{display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;min-height:120px;flex:1;overflow:auto}
 .chip{display:flex;align-items:center;gap:2px;background:var(--accent-soft);border-radius:999px;padding:3px 4px 3px 14px;font-weight:600;height:36px}
 .chip.h{background:var(--panel2);color:var(--muted);text-decoration:line-through}
@@ -168,7 +169,12 @@ body.fsm .fsb svg{transform:rotate(45deg)}
       <div class="aih"><span class="spark">✦</span><b>Smart-Eingabe</b><small>Einfach einfügen – Vor- und Nachnamen werden automatisch getrennt.</small></div>
       <textarea id="addIn" rows="2" placeholder="z. B. Max Mustermann Anna Schmidt Tom Weber" autocomplete="off" aria-label="Namen eingeben"></textarea>
       <div class="prev" id="prev" aria-live="polite"></div>
-      <button class="go" id="addBtn" disabled>Hinzufügen</button>
+      <div class="row">
+        <button class="go" id="addBtn" disabled>Hinzufügen</button>
+        <button class="sec" id="photoBtn"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Foto der Klassenliste</button>
+        <input type="file" id="photoIn" accept="image/*" hidden>
+      </div>
+      <div class="hint" id="ocrS" aria-live="polite" style="margin:0"></div>
     </div>
     <div class="chips" id="chips"></div>
     <div class="row">
@@ -419,7 +425,7 @@ function newList(){
 function renderChips(){
   const box=$("#chips");box.innerHTML="";
   const list=entries();
-  if(!list.length){box.innerHTML='<div class="empty">Noch keine Einträge.<br>Gib oben Namen ein, getrennt wird automatisch.</div>';return}
+  if(!list.length){box.innerHTML='<div class="empty">Noch keine Einträge.<br>Gib oben Namen ein, getrennt durch Komma.</div>';return}
   list.forEach((e,i)=>{
     const c=document.createElement("div");c.className="chip"+(e.hidden?" h":"");
     const t=document.createElement("span");t.textContent=e.name;
@@ -531,6 +537,77 @@ function add(){
 $("#addIn").oninput=e=>{S.draft=e.target.value;save();pend=smartSplit(e.target.value);renderPrev()};
 $("#addBtn").onclick=add;
 $("#addIn").onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();add()}};
+/* ---------- Foto der Klassenliste → Namen (Texterkennung läuft im Browser) ---------- */
+const SKIP=/^(klasse|klassenliste|liste|namen?|nr|lfd|sch[uü]ler\w*|vorname|nachname|datum|seite|anwesenheit\w*|unterschrift|jahrgang|schuljahr|lehrer\w*|klassenlehrer\w*)$/i;
+function cleanOCR(text){
+  const cl=part=>part.split(/\s+/).filter(w=>w&&!/\d/.test(w))
+    .map(w=>w.replace(/[^A-Za-zÀ-ÿ'.-]/g,"").replace(/^[-'.]+/,"").replace(/[-']+$/,""))
+    .filter(w=>/[A-Za-zÀ-ÿ]{2}/.test(w)||/^[A-Za-zÀ-ÿ]\.$/.test(w));
+  const out=[];
+  text.replace(/[’‘`´]/g,"'").split(/\r?\n/).forEach(line=>{
+    if(!line.trim())return;
+    const parts=line.split(",").map(cl).filter(a=>a.length);
+    if(!parts.length||SKIP.test(parts[0][0]))return;
+    let name;
+    if(parts.length===2&&parts[0].length<=2&&parts[1].length<=3){
+      const a=info(parts[1][0]),b=info(parts[0][0]);
+      name=(a.f&&(!b.f||b.s))?parts[1].concat(parts[0]).join(" "):parts.map(p=>p.join(" ")).join(", ");
+    }else name=parts.map(p=>p.join(" ")).join(", ");
+    if(name.replace(/[^A-Za-zÀ-ÿ]/g,"").length>=3)out.push(name);
+  });
+  return out;
+}
+let tessP=null;
+function loadTess(){
+  if(window.Tesseract)return Promise.resolve();
+  return tessP||(tessP=new Promise((res,rej)=>{
+    const sc=document.createElement("script");
+    sc.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+    sc.onload=res;sc.onerror=()=>{tessP=null;rej(new Error("load"))};document.head.append(sc);
+  }));
+}
+async function prepImage(file){
+  let bmp;
+  try{bmp=await createImageBitmap(file,{imageOrientation:"from-image"})}
+  catch(e){bmp=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file)})}
+  const w0=bmp.width,h0=bmp.height,sc=Math.max(.4,Math.min(2.5,2400/Math.max(w0,h0)));
+  const c=document.createElement("canvas");c.width=Math.round(w0*sc);c.height=Math.round(h0*sc);
+  const x=c.getContext("2d",{willReadFrequently:true});x.drawImage(bmp,0,0,c.width,c.height);
+  const d=x.getImageData(0,0,c.width,c.height),a=d.data,hist=new Uint32Array(256),N=a.length/4;
+  for(let i=0;i<a.length;i+=4){const g=(a[i]*.299+a[i+1]*.587+a[i+2]*.114)|0;a[i]=g;hist[g]++}
+  let lo=0,hi=255,acc=0;
+  for(let i=0;i<256;i++){acc+=hist[i];if(acc>N*.02){lo=i;break}}
+  acc=0;for(let i=255;i>=0;i--){acc+=hist[i];if(acc>N*.02){hi=i;break}}
+  const r=Math.max(1,hi-lo);
+  for(let i=0;i<a.length;i+=4){const v=Math.max(0,Math.min(255,((a[i]-lo)*255/r)|0));a[i]=a[i+1]=a[i+2]=v}
+  x.putImageData(d,0,0);return c;
+}
+async function readPhoto(file){
+  if(!file)return;
+  const btn=$("#photoBtn"),say=t=>{$("#ocrS").textContent=t};
+  btn.disabled=true;
+  try{
+    say("Foto wird vorbereitet …");
+    const canvas=await prepImage(file);
+    say("Texterkennung wird geladen … (beim ersten Mal ca. 15 MB, danach schnell)");
+    await loadTess();
+    const w=await Tesseract.createWorker("deu",1,{
+      langPath:"https://cdn.jsdelivr.net/npm/@tesseract.js-data/deu/4.0.0_best_int",
+      logger:m=>{if(m.status==="recognizing text")say("Text wird erkannt … "+Math.round(m.progress*100)+" %")}
+    });
+    const {data}=await w.recognize(canvas);
+    await w.terminate();
+    const lines=cleanOCR(data.text||"");
+    if(!lines.length){say("Es wurde kein Name erkannt. Probiere ein schärferes, gerade fotografiertes Foto bei gutem Licht.");return}
+    const ta=$("#addIn");ta.value=(ta.value.trim()?ta.value.trim()+"\n":"")+lines.join("\n");
+    S.draft=ta.value;save();pend=smartSplit(ta.value);renderPrev();
+    say("✓ "+pend.length+" Namen erkannt – bitte unten kurz prüfen und dann „Hinzufügen“ tippen.");
+  }catch(e){
+    say("Die Texterkennung hat nicht geklappt. Beim ersten Mal wird Internet gebraucht, um sie zu laden.");
+  }finally{btn.disabled=false}
+}
+$("#photoBtn").onclick=()=>$("#photoIn").click();
+$("#photoIn").onchange=e=>{const f=e.target.files[0];e.target.value="";readPhoto(f)};
 const showAll=()=>{if(spinning)return;entries().forEach(e=>e.hidden=false);save();$("#win").innerHTML="";renderAll()};
 $("#b1").onclick=$("#b2").onclick=$("#rnd").onclick=showAll;
 $("#b3").onclick=()=>{if(spinning)return;if(entries().length&&confirm("Wirklich alle Einträge löschen?")){S.lists[S.active]=[];save();$("#win").innerHTML="";renderAll()}};
