@@ -419,7 +419,7 @@ function newList(){
 function renderChips(){
   const box=$("#chips");box.innerHTML="";
   const list=entries();
-  if(!list.length){box.innerHTML='<div class="empty">Noch keine Einträge.<br>Gib oben Namen ein, getrennt durch Komma.</div>';return}
+  if(!list.length){box.innerHTML='<div class="empty">Noch keine Einträge.<br>Gib oben Namen ein, getrennt wird automatisch.</div>';return}
   list.forEach((e,i)=>{
     const c=document.createElement("div");c.className="chip"+(e.hidden?" h":"");
     const t=document.createElement("span");t.textContent=e.name;
